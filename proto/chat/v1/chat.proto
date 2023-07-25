@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+package chat.v1;
+
+option go_package = "github.com/vitthalaa/go-grpc-chat/gen/go/chat/v1";
+
+// ChatService ...
+service ChatService {
+  rpc Connect (ConnectRequest) returns (stream Message) {}
+  rpc CreateGroupChat(CreateGroupChatRequest) returns (google.protobuf.Empty) {}
+  rpc JoinGroupChat(JoinGroupChatRequest) returns (google.protobuf.Empty) {}
+  rpc LeaveGroupChat(LeaveGroupChatRequest) returns (google.protobuf.Empty) {}
+  rpc SendMessage(stream SendMessageRequest) returns (google.protobuf.Empty) {}
+  rpc ListChannels(google.protobuf.Empty) returns (ListChannelsResponse) {}
+}
+
+// ChannelType identifies the type of channel
+enum ChannelType {
+  USER = 0;
+  GROUP = 1;
+}
+
+// Message is a chat message.
+// It can be either a user message or a group message depending on the channel.
+message Message {
+  Channel channel = 1;
+  string sender = 2;
+  string message = 3;
+  google.protobuf.Timestamp time = 4;
+}
+
+// Channel represents a chat channel of either a user or a group
+message Channel {
+  ChannelType type = 1;
+  string name = 2;
+}
+
+// ConnectRequest is used to connect to a chat server
+message ConnectRequest {
+  string username = 1;
+}
+
+// CreateGroupChatRequest is used to create a group chat
+message CreateGroupChatRequest {
+  string channelName = 1;
+}
+
+// JoinGroupChatRequest is used to join a group chat
+message JoinGroupChatRequest {
+  string channelName = 1;
+}
+
+// LeaveGroupChatRequest is used to leave a group chat
+message LeaveGroupChatRequest {
+  string channelName = 1;
+}
+
+// SendMessageRequest is used to send a message
+// receiver can be either a user name or a group name
+message SendMessageRequest {
+  string receiver = 1;
+  string message = 2;
+}
+
+// ListChannelsResponse is used to list all the chat channels either a user or a group
+message ListChannelsResponse {
+  repeated Channel channels = 1;
+}
+
+
