@@ -8,9 +8,13 @@ import (
 	"log"
 	"time"
 
-	pb "github.com/vitthalaa/go-grpc-chat/gen/go/chat/v1"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
+
+	pb "github.com/vitthalaa/go-grpc-chat/gen/go/chat/v1"
+	"github.com/vitthalaa/go-grpc-chat/server/metadata"
 )
 
 type Channel struct {
@@ -65,18 +69,38 @@ func (s *ChatService) Connect(req *pb.ConnectRequest, stream pb.ChatService_Conn
 }
 
 func (s *ChatService) CreateGroupChat(ctx context.Context, req *pb.CreateGroupChatRequest) (*emptypb.Empty, error) {
+	_, err := s.getAuthUser(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	return nil, errUnimplemented
 }
 
 func (s *ChatService) JoinGroupChat(ctx context.Context, req *pb.JoinGroupChatRequest) (*emptypb.Empty, error) {
+	_, err := s.getAuthUser(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	return nil, errUnimplemented
 }
 
 func (s *ChatService) LeaveGroupChat(ctx context.Context, req *pb.LeaveGroupChatRequest) (*emptypb.Empty, error) {
+	_, err := s.getAuthUser(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	return nil, errUnimplemented
 }
 
 func (s *ChatService) SendMessage(msgStream pb.ChatService_SendMessageServer) error {
+	sender, err := s.getAuthUser(msgStream.Context())
+	if err != nil {
+		return err
+	}
+
 	req, err := msgStream.Recv()
 	if err == io.EOF {
 		return nil
@@ -86,7 +110,6 @@ func (s *ChatService) SendMessage(msgStream pb.ChatService_SendMessageServer) er
 		return err
 	}
 
-	// todo: get user from context to put channel name
 	channel, ok := s.channels[req.GetReceiver()]
 	if !ok {
 		return errors.New("invalid receiver")
@@ -103,7 +126,7 @@ func (s *ChatService) SendMessage(msgStream pb.ChatService_SendMessageServer) er
 	}
 
 	if channel.Type == pb.ChannelType_USER {
-		err = s.sendUserMessage(channel.Name, "sender", req.GetMessage(), pbChannel)
+		err = s.sendUserMessage(channel.Name, sender, req.GetMessage(), pbChannel)
 		if err != nil {
 			return err
 		}
@@ -112,7 +135,7 @@ func (s *ChatService) SendMessage(msgStream pb.ChatService_SendMessageServer) er
 	}
 
 	for _, user := range channel.Users {
-		err = s.sendUserMessage(user, "sender", req.GetMessage(), pbChannel)
+		err = s.sendUserMessage(user, sender, req.GetMessage(), pbChannel)
 		if err != nil {
 			log.Println(err)
 		}
@@ -122,8 +145,18 @@ func (s *ChatService) SendMessage(msgStream pb.ChatService_SendMessageServer) er
 }
 
 func (s *ChatService) ListChannels(ctx context.Context, req *emptypb.Empty) (*pb.ListChannelsResponse, error) {
-	resChan := make([]*pb.Channel, 0, len(s.channels))
+	user, err := s.getAuthUser(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	resChan := make([]*pb.Channel, 0, len(s.channels)-1)
 	for _, c := range s.channels {
+		// not including user who requested list
+		if c.Name == user {
+			continue
+		}
+
 		resChan = append(resChan, &pb.Channel{
 			Type: c.Type,
 			Name: c.Name,
@@ -149,4 +182,17 @@ func (s *ChatService) sendUserMessage(user, sender, msg string, channel *pb.Chan
 	}
 
 	return nil
+}
+
+func (s *ChatService) getAuthUser(ctx context.Context) (string, error) {
+	username := metadata.GetUserName(ctx)
+	if username == "" {
+		return "", status.Error(codes.Unauthenticated, "unauthenticated")
+	}
+
+	if _, ok := s.userChannels[username]; !ok {
+		return "", status.Error(codes.Unauthenticated, "unauthenticated")
+	}
+
+	return username, nil
 }

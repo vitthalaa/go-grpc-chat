@@ -23,7 +23,7 @@ const (
 	SendMessage     option = "Send a message"
 )
 
-var selectHelp string = "Press down/up arrow to move cursor\nPress enter to select option"
+var selectHelp = "Press down/up arrow to move cursor. Press enter to select option"
 
 func (o option) String() string {
 	return string(o)
